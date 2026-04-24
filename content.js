@@ -256,6 +256,53 @@
     }
   }
 
+  function normalizeSelectorInput(rawSelector) {
+    const value = (rawSelector || "").trim();
+    if (!value) return "";
+    const querySelectorMatch = value.match(/^document\.querySelector\((["'`])([\s\S]+)\1\)$/);
+    if (querySelectorMatch) {
+      return querySelectorMatch[2];
+    }
+    return value;
+  }
+
+  function resolveSelectorToElement(selector) {
+    const normalized = normalizeSelectorInput(selector);
+    if (!normalized) {
+      return { element: null, error: "Selector is empty." };
+    }
+
+    const looksLikeXPath = normalized.startsWith("/") || normalized.startsWith("(");
+    if (looksLikeXPath) {
+      try {
+        const result = document.evaluate(
+          normalized,
+          document,
+          null,
+          XPathResult.FIRST_ORDERED_NODE_TYPE,
+          null
+        );
+        const node = result.singleNodeValue;
+        if (node instanceof HTMLElement) {
+          return { element: node, error: "" };
+        }
+        return { element: null, error: "XPath found no valid HTML element." };
+      } catch (_error) {
+        return { element: null, error: "Invalid XPath." };
+      }
+    }
+
+    try {
+      const node = document.querySelector(normalized);
+      if (!(node instanceof HTMLElement)) {
+        return { element: null, error: "No element matched that CSS selector." };
+      }
+      return { element: node, error: "" };
+    } catch (_error) {
+      return { element: null, error: "Invalid CSS selector." };
+    }
+  }
+
   function cleanStringValue(value) {
     if (!value || value === "normal" || value === "none" || value === "auto" || value === "rgba(0, 0, 0, 0)") {
       return "";
@@ -340,17 +387,55 @@
       .join(" ");
   }
 
+  function normalizeClassName(raw) {
+    if (!raw) return "";
+    return raw.trim().replace(/\s+/g, "-");
+  }
+
   function convertDomToWebflowModel(root) {
     const nodes = [];
     const styles = [];
     const assets = [];
+    const styleByClassName = new Map();
+    const fallbackClassCounterByTag = new Map();
+
+    function nextFallbackClassName(tagName) {
+      const current = fallbackClassCounterByTag.get(tagName) || 0;
+      const next = current + 1;
+      fallbackClassCounterByTag.set(tagName, next);
+      return `copied-${tagName}${next > 1 ? `-${next}` : ""}`;
+    }
+
+    function getOrCreateStyleId(className, computedStyleMap) {
+      const normalized = normalizeClassName(className);
+      if (!normalized) return "";
+      const existingId = styleByClassName.get(normalized);
+      if (existingId) return existingId;
+
+      const styleId = generateUUID();
+      const styleEntry = {
+        _id: styleId,
+        fake: false,
+        type: "class",
+        name: normalized,
+        namespace: "",
+        comb: "",
+        styleLess: styleMapToStyleLess(computedStyleMap),
+        variants: {},
+        children: [],
+        origin: null,
+        selector: null
+      };
+
+      styleByClassName.set(normalized, styleId);
+      styles.push(styleEntry);
+      return styleId;
+    }
 
     function walk(el) {
       if (!(el instanceof HTMLElement)) return null;
 
       const nodeId = generateUUID();
-      const styleId = generateUUID();
-      const styleName = `wfec-${el.tagName.toLowerCase()}-${styles.length + 1}`;
       const computedStyleMap = extractComputedStyles(el);
       const mapped = mapAttributes(el);
       const childIds = [];
@@ -375,11 +460,23 @@
         }
       }
 
+      const sourceClassNames = Array.from(el.classList)
+        .map((name) => normalizeClassName(name))
+        .filter(Boolean);
+
+      const classNamesForNode = sourceClassNames.length > 0
+        ? sourceClassNames
+        : [nextFallbackClassName(el.tagName.toLowerCase())];
+
+      const classIds = classNamesForNode
+        .map((className) => getOrCreateStyleId(className, computedStyleMap))
+        .filter(Boolean);
+
       const node = {
         _id: nodeId,
         type: inferWebflowNodeType(el.tagName),
         tag: el.tagName.toLowerCase(),
-        classes: [styleId],
+        classes: classIds,
         children: [...textNodeIds, ...childIds],
         data: (() => {
           const data = {
@@ -392,22 +489,7 @@
         })()
       };
 
-      const styleEntry = {
-        _id: styleId,
-        fake: false,
-        type: "class",
-        name: styleName,
-        namespace: "",
-        comb: "",
-        styleLess: styleMapToStyleLess(computedStyleMap),
-        variants: {},
-        children: [],
-        origin: null,
-        selector: null
-      };
-
       nodes.push(node);
-      styles.push(styleEntry);
       return node;
     }
 
@@ -460,6 +542,19 @@
     }
   }
 
+  function selectBySelector(selector) {
+    const { element, error } = resolveSelectorToElement(selector);
+    if (!element) {
+      return { ok: false, error: error || "Could not resolve selector." };
+    }
+    stopSelectionMode();
+    selectElement(element);
+    return {
+      ok: true,
+      label: getElementLabel(element)
+    };
+  }
+
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
     if (!message?.type) return;
     if (message.type === "START_SELECTION_MODE") {
@@ -469,6 +564,10 @@
     }
     if (message.type === "COPY_FOR_WEBFLOW") {
       sendResponse(copyForWebflow());
+      return true;
+    }
+    if (message.type === "SELECT_BY_SELECTOR") {
+      sendResponse(selectBySelector(message.selector));
       return true;
     }
     if (message.type === "GET_SELECTION_STATE") {

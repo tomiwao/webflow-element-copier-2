@@ -77,6 +77,29 @@
         border-color: var(--accent);
         color: #e2e8f0;
       }
+      .field {
+        margin-bottom: 8px;
+      }
+      .label {
+        display: block;
+        margin: 0 0 6px;
+        font-size: 11px;
+        color: #93c5fd;
+        letter-spacing: 0.2px;
+      }
+      .input {
+        width: 100%;
+        background: #0b1220;
+        border: 1px solid #334155;
+        border-radius: 8px;
+        color: var(--text);
+        font-size: 12px;
+        padding: 9px 10px;
+        outline: none;
+      }
+      .input:focus {
+        border-color: var(--accent);
+      }
       .status {
         min-height: 50px;
         border-radius: 10px;
@@ -123,6 +146,16 @@
       <p class="subtitle">Copy rendered DOM + computed styles into Webflow clipboard format.</p>
       <section class="panel">
         <button id="selectBtn" class="btn btn-primary">Select Element</button>
+        <div class="field">
+          <label for="selectorInput" class="label">Exact Selector (From DevTools)</label>
+          <input
+            id="selectorInput"
+            class="input"
+            type="text"
+            placeholder=".hero .cta-wrap > div:nth-child(1)"
+          />
+        </div>
+        <button id="selectBySelectorBtn" class="btn btn-secondary">Select by CSS/XPath</button>
         <button id="copyBtn" class="btn btn-secondary">Copy for Webflow</button>
         <button id="testBtn" class="btn btn-secondary">Copy Minimal Test Payload</button>
       </section>

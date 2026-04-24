@@ -1,5 +1,7 @@
 const statusEl = document.getElementById("status");
 const selectBtn = document.getElementById("selectBtn");
+const selectorInput = document.getElementById("selectorInput");
+const selectBySelectorBtn = document.getElementById("selectBySelectorBtn");
 const copyBtn = document.getElementById("copyBtn");
 const testBtn = document.getElementById("testBtn");
 
@@ -151,6 +153,32 @@ selectBtn.addEventListener("click", async () => {
   }
 });
 
+selectBySelectorBtn.addEventListener("click", async () => {
+  try {
+    const selector = selectorInput.value.trim();
+    if (!selector) {
+      setStatus("Paste a CSS selector or XPath copied from DevTools first.", "warn");
+      return;
+    }
+    const tab = await getActiveTab();
+    if (isRestrictedUrl(tab.url)) {
+      setStatus("Cannot access this page. Try a regular website tab.", "warn");
+      return;
+    }
+    const res = await sendMessage(tab.id, {
+      type: "SELECT_BY_SELECTOR",
+      selector
+    });
+    if (!res?.ok) {
+      setStatus(res?.error || "Could not find an element for that selector.", "warn");
+      return;
+    }
+    setStatus(`Selected: ${res.label}`, "ok");
+  } catch (error) {
+    setStatus(`Selector selection failed: ${error.message}`, "warn");
+  }
+});
+
 copyBtn.addEventListener("click", async () => {
   try {
     const tab = await getActiveTab();
@@ -201,3 +229,10 @@ async function refreshSelectionState() {
 }
 
 refreshSelectionState();
+
+selectorInput.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    selectBySelectorBtn.click();
+  }
+});
