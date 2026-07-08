@@ -131,8 +131,9 @@
   }
 
   function positionOverlay(overlay, rect) {
-    overlay.style.left = `${rect.left + window.scrollX}px`;
-    overlay.style.top = `${rect.top + window.scrollY}px`;
+    // Overlays are position: fixed, so rect values are already viewport-relative.
+    overlay.style.left = `${rect.left}px`;
+    overlay.style.top = `${rect.top}px`;
     overlay.style.width = `${rect.width}px`;
     overlay.style.height = `${rect.height}px`;
     overlay.style.display = "block";
@@ -142,8 +143,8 @@
     if (!state.labelEl || !el || !rect) return;
     state.labelEl.textContent = getElementLabel(el);
     state.labelEl.style.display = "block";
-    const labelTop = Math.max(0, rect.top + window.scrollY - 28);
-    state.labelEl.style.left = `${rect.left + window.scrollX}px`;
+    const labelTop = Math.max(0, rect.top - 28);
+    state.labelEl.style.left = `${rect.left}px`;
     state.labelEl.style.top = `${labelTop}px`;
   }
 
@@ -245,8 +246,12 @@
     document.removeEventListener("mousemove", onMouseMove, true);
     document.removeEventListener("click", onClick, true);
     document.removeEventListener("keydown", onKeyDown, true);
-    window.removeEventListener("scroll", onScrollOrResize, true);
-    window.removeEventListener("resize", onScrollOrResize, true);
+    // Keep scroll/resize listeners while a selection is showing: the selected
+    // box is position: fixed, so it must be repositioned as the page scrolls.
+    if (!state.selectedElement) {
+      window.removeEventListener("scroll", onScrollOrResize, true);
+      window.removeEventListener("resize", onScrollOrResize, true);
+    }
     state.hoveredElement = null;
     hideHoverUI();
     if (state.selectedElement) {
