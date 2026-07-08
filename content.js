@@ -396,7 +396,7 @@
     const nodes = [];
     const styles = [];
     const assets = [];
-    const styleByClassName = new Map();
+    const styleVariantsByClassName = new Map();
     const fallbackClassCounterByTag = new Map();
 
     function nextFallbackClassName(tagName) {
@@ -409,25 +409,32 @@
     function getOrCreateStyleId(className, computedStyleMap) {
       const normalized = normalizeClassName(className);
       if (!normalized) return "";
-      const existingId = styleByClassName.get(normalized);
-      if (existingId) return existingId;
+
+      const styleLess = styleMapToStyleLess(computedStyleMap);
+      const variants = styleVariantsByClassName.get(normalized) || [];
+
+      const existing = variants.find((variant) => variant.styleLess === styleLess);
+      if (existing) return existing.id;
 
       const styleId = generateUUID();
+      const variantIndex = variants.length;
+      const name = variantIndex === 0 ? normalized : `${normalized}-${variantIndex + 1}`;
       const styleEntry = {
         _id: styleId,
         fake: false,
         type: "class",
-        name: normalized,
+        name,
         namespace: "",
         comb: "",
-        styleLess: styleMapToStyleLess(computedStyleMap),
+        styleLess,
         variants: {},
         children: [],
         origin: null,
         selector: null
       };
 
-      styleByClassName.set(normalized, styleId);
+      variants.push({ styleLess, id: styleId });
+      styleVariantsByClassName.set(normalized, variants);
       styles.push(styleEntry);
       return styleId;
     }
